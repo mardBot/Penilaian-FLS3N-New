@@ -22,6 +22,7 @@ import {
   Save,
   Check,
   FileDown,
+  FileUp,
   FileSpreadsheet,
   Plus,
   Printer,
@@ -83,6 +84,7 @@ interface NavItemProps {
   active: boolean;
   onClick: () => void;
   darkMode?: boolean;
+  sidebarOpen?: boolean;
 }
 
 // --- Constants ---
@@ -133,26 +135,33 @@ const CABANG_LOMBA = [
 
 // --- Components ---
 
-const NavItem = ({ icon: Icon, label, active, onClick, darkMode }: NavItemProps) => (
+const NavItem = ({ icon: Icon, label, active, onClick, darkMode, sidebarOpen = true }: NavItemProps) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-300 rounded-xl mb-1 ${
+    className={`w-full flex items-center gap-3 py-3 transition-all duration-300 rounded-xl mb-1 ${
+      sidebarOpen ? 'px-4' : 'px-0 justify-center'
+    } ${
       active 
         ? (darkMode ? 'bg-indigo-500/20 text-indigo-400 shadow-lg' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-200') 
         : (darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-600')
     }`}
+    title={!sidebarOpen ? label : undefined}
   >
-    <div className={`p-1.5 rounded-lg transition-colors ${active ? (darkMode ? 'bg-indigo-500 text-white' : 'bg-white text-indigo-600 shadow-sm') : 'text-inherit'}`}>
+    <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${active ? (darkMode ? 'bg-indigo-500 text-white' : 'bg-white text-indigo-600 shadow-sm') : 'text-inherit'}`}>
       <Icon size={18} />
     </div>
-    <span className={`font-bold text-sm ${active ? 'opacity-100' : 'opacity-90'}`}>{label}</span>
-    {active && (
-      <motion.div 
-        layoutId="active-indicator"
-        className="ml-auto"
-      >
-        <div className={`w-1.5 h-1.5 rounded-full ${darkMode ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.6)]' : 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]'}`} />
-      </motion.div>
+    {sidebarOpen && (
+      <>
+        <span className={`font-bold text-sm whitespace-nowrap ${active ? 'opacity-100' : 'opacity-90'}`}>{label}</span>
+        {active && (
+          <motion.div 
+            layoutId="active-indicator"
+            className="ml-auto"
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${darkMode ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.6)]' : 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]'}`} />
+          </motion.div>
+        )}
+      </>
     )}
   </button>
 );
@@ -569,6 +578,43 @@ const DashboardView = ({
           ))}
         </div>
       </div>
+
+      {/* Participant Count per Category */}
+      <div className="space-y-6 mt-8">
+        <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Jumlah Peserta per Cabang Lomba</h3>
+        <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[500px]">
+              <thead>
+                <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Cabang Lomba</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Jumlah Peserta</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
+                {categoryData.map((cat, i) => (
+                  <tr key={i} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
+                    <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>
+                      {cat.name}
+                    </td>
+                    <td className={`px-6 py-4 text-sm font-bold text-right ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                      {cat.peserta} Peserta
+                    </td>
+                  </tr>
+                ))}
+                <tr className={`${darkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+                  <td className={`px-6 py-4 text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                    Total Keseluruhan
+                  </td>
+                  <td className={`px-6 py-4 text-sm font-black text-right ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    {totalPeserta} Peserta
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -579,6 +625,7 @@ const DataPesertaView = ({
   onEditClick,
   onDeleteClick,
   onImportCSV,
+  onExportCSV,
   schoolFilter,
   onSchoolFilterChange,
   categoryFilter,
@@ -593,6 +640,7 @@ const DataPesertaView = ({
   onEditClick: (peserta: Peserta) => void,
   onDeleteClick: (id: string) => void,
   onImportCSV: (e: React.ChangeEvent<HTMLInputElement>) => void,
+  onExportCSV: () => void,
   schoolFilter: string,
   onSchoolFilterChange: (school: string) => void,
   categoryFilter: string,
@@ -666,6 +714,12 @@ const DataPesertaView = ({
             <FileDown size={16} /> Import CSV
           </button>
           <button 
+            onClick={onExportCSV}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
+          >
+            <FileUp size={16} /> Export CSV
+          </button>
+          <button 
             onClick={onAddClick}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
           >
@@ -676,68 +730,70 @@ const DataPesertaView = ({
       <div className={`rounded-2xl border shadow-sm overflow-hidden ${
         darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
       }`}>
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-20">No. Urut</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Sekolah</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Peserta</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Tempat Tgl Lahir</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Cabang Lomba</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
-            {pesertaList.length === 0 ? (
-              <tr>
-                <td colSpan={6} className={`px-6 py-12 text-center text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Belum ada data peserta yang terdaftar atau sesuai filter.
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-20">No. Urut</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Sekolah</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Peserta</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Tempat Tgl Lahir</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Cabang Lomba</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Aksi</th>
               </tr>
-            ) : (
-              [...pesertaList].sort((a, b) => (a.school || '').localeCompare(b.school || '')).map((peserta, index) => (
-                <tr key={peserta.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
-                  <td className="px-6 py-4 text-sm text-slate-500 font-mono">{index + 1}</td>
-                  <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>{peserta.school}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                        darkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {(peserta.name || '?')[0].toUpperCase()}
-                      </div>
-                      <span className={`text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>{peserta.name || 'Tanpa Nama'}</span>
-                    </div>
-                  </td>
-                  <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{peserta.birthInfo}</td>
-                  <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{peserta.category}</td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button 
-                        onClick={() => onEditClick(peserta)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          darkMode ? 'text-slate-400 hover:text-blue-400 hover:bg-slate-800' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
-                        }`}
-                        title="Edit Peserta"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => onDeleteClick(peserta.id)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          darkMode ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                        }`}
-                        title="Hapus Peserta"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+            </thead>
+            <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
+              {pesertaList.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className={`px-6 py-12 text-center text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Belum ada data peserta yang terdaftar atau sesuai filter.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                [...pesertaList].sort((a, b) => (a.school || '').localeCompare(b.school || '')).map((peserta, index) => (
+                  <tr key={peserta.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
+                    <td className="px-6 py-4 text-sm text-slate-500 font-mono">{index + 1}</td>
+                    <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>{peserta.school}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                          darkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {(peserta.name || '?')[0].toUpperCase()}
+                        </div>
+                        <span className={`text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>{peserta.name || 'Tanpa Nama'}</span>
+                      </div>
+                    </td>
+                    <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{peserta.birthInfo}</td>
+                    <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{peserta.category}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => onEditClick(peserta)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            darkMode ? 'text-slate-400 hover:text-blue-400 hover:bg-slate-800' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                          title="Edit Peserta"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => onDeleteClick(peserta.id)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            darkMode ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                          }`}
+                          title="Hapus Peserta"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -846,16 +902,17 @@ const NomorTampilanView = ({
       <div className={`rounded-2xl border shadow-sm overflow-hidden ${
         darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
       }`}>
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-20">No. Urut</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Sekolah</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Cabang Lomba</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-40">Nomor Tampilan</th>
-            </tr>
-          </thead>
-          <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+              <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-20">No. Urut</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Sekolah</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Cabang Lomba</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-40">Nomor Tampilan</th>
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
             {[...uniquePesertaList].sort((a, b) => a.school.localeCompare(b.school)).map((peserta, index) => (
               <tr key={peserta.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
                 <td className="px-6 py-4 text-sm text-slate-500 font-mono">{index + 1}</td>
@@ -885,6 +942,7 @@ const NomorTampilanView = ({
         </table>
       </div>
     </div>
+  </div>
   );
 };
 
@@ -1105,14 +1163,15 @@ const RekapNilaiView = ({ pesertaList, cabangLomba, settings, darkMode }: { pese
   const downloadPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
     const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Header
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("REKAPITULASI NILAI", pageWidth / 2, 15, { align: "center" });
-    doc.setFontSize(12);
     const today = new Date(settings.date);
-    doc.text(`FLS3N-SD KECAMATAN ${settings.place.toUpperCase()} TAHUN ${today.getFullYear()}`, pageWidth / 2, 22, { align: "center" });
+    
+    const drawHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("REKAPITULASI NILAI", pageWidth / 2, 15, { align: "center" });
+      doc.setFontSize(12);
+      doc.text(`FLS3N-SD KECAMATAN ${settings.place.toUpperCase()} TAHUN ${today.getFullYear()}`, pageWidth / 2, 22, { align: "center" });
+    };
     
     const headRow1: any[] = [
       { content: 'No.\nUrut', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
@@ -1149,6 +1208,8 @@ const RekapNilaiView = ({ pesertaList, cabangLomba, settings, darkMode }: { pese
       head: [headRow1, headRow2],
       body: tableData,
       startY: 30,
+      margin: { top: 30, bottom: 20 },
+      didDrawPage: drawHeader,
       theme: 'grid',
       styles: { 
         fontSize: 8,
@@ -1317,17 +1378,18 @@ const RekapPerCabangView = ({ pesertaList, schoolList, cabangLomba, settings, da
   });
 
   const downloadPDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Header
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("REKAP NILAI", pageWidth / 2, 15, { align: "center" });
-    doc.setFontSize(12);
     const today = new Date(settings.date);
-    doc.text(`FLS3N-SD KECAMATAN ${settings.place.toUpperCase()} TAHUN ${today.getFullYear()}`, pageWidth / 2, 22, { align: "center" });
-    doc.text(selectedCategory.toUpperCase(), pageWidth / 2, 29, { align: "center" });
+    
+    const drawHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("REKAP NILAI", pageWidth / 2, 15, { align: "center" });
+      doc.setFontSize(12);
+      doc.text(`FLS3N-SD KECAMATAN ${settings.place.toUpperCase()} TAHUN ${today.getFullYear()}`, pageWidth / 2, 22, { align: "center" });
+      doc.text(selectedCategory.toUpperCase(), pageWidth / 2, 29, { align: "center" });
+    };
     
     const tableData = displayData.map((p) => [
       p.rank,
@@ -1340,7 +1402,9 @@ const RekapPerCabangView = ({ pesertaList, schoolList, cabangLomba, settings, da
     autoTable(doc, {
       head: [['Peringkat', 'No.\nTampilan', 'Nama Sekolah', 'Cabang Lomba', 'Total Nilai']],
       body: tableData,
-      startY: 40,
+      startY: 35,
+      margin: { top: 35, bottom: 20 },
+      didDrawPage: drawHeader,
       theme: 'grid',
       headStyles: { 
         fillColor: [255, 255, 255], 
@@ -1367,7 +1431,15 @@ const RekapPerCabangView = ({ pesertaList, schoolList, cabangLomba, settings, da
     });
 
     // Footer
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    let finalY = (doc as any).lastAutoTable.finalY + 15;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // Check if there is enough space for the signatures (need about 50 units)
+    if (finalY + 50 > pageHeight) {
+      doc.addPage();
+      finalY = 20; // reset Y to top of new page
+    }
+
     const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
     const dateStr = `${settings.place}, ${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`;
     
@@ -1382,7 +1454,7 @@ const RekapPerCabangView = ({ pesertaList, schoolList, cabangLomba, settings, da
     // Signatures
     const sigY = finalY + 10;
     doc.text("Mengetahui", 20, sigY);
-    doc.text("Ketua FLS2N-SD Kec. Beji", 20, sigY + 5);
+    doc.text("Ketua FLS3N-SD Kec. Beji", 20, sigY + 5);
     
     const catJudgeName = selectedCategory === 'Semua Cabang Lomba' ? 'Juri' : `Juri (${selectedCategory})`;
     doc.text(catJudgeName, rightColX, sigY + 5);
@@ -1463,7 +1535,7 @@ const RekapPerCabangView = ({ pesertaList, schoolList, cabangLomba, settings, da
         darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
       }`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-24 text-center">Peringkat</th>
@@ -1544,17 +1616,18 @@ const DaftarHadirView = ({ pesertaList, cabangLomba, settings, darkMode }: { pes
   });
 
   const downloadPDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Header
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("DAFTAR HADIR", pageWidth / 2, 15, { align: "center" });
-    doc.setFontSize(12);
     const today = new Date(settings.date);
-    doc.text(`FLS3N-SD KECAMATAN ${settings.place.toUpperCase()} TAHUN ${today.getFullYear()}`, pageWidth / 2, 22, { align: "center" });
-    doc.text(selectedCategory.toUpperCase(), pageWidth / 2, 29, { align: "center" });
+    
+    const drawHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("DAFTAR HADIR", pageWidth / 2, 15, { align: "center" });
+      doc.setFontSize(12);
+      doc.text(`FLS3N-SD KECAMATAN ${settings.place.toUpperCase()} TAHUN ${today.getFullYear()}`, pageWidth / 2, 22, { align: "center" });
+      doc.text(selectedCategory.toUpperCase(), pageWidth / 2, 29, { align: "center" });
+    };
     
     const tableData = sortedData.map((p, index) => [
       index + 1,
@@ -1569,7 +1642,9 @@ const DaftarHadirView = ({ pesertaList, cabangLomba, settings, darkMode }: { pes
     autoTable(doc, {
       head: [['No.\nUrut', 'No.\nTampilan', 'Cabang Lomba', 'Nama Sekolah', 'Nama Peserta', 'Tempat Tgl Lahir', 'Tanda Tangan']],
       body: tableData,
-      startY: 40,
+      startY: 35,
+      margin: { top: 35, bottom: 20 },
+      didDrawPage: drawHeader,
       theme: 'grid',
       headStyles: { 
         fillColor: [255, 255, 255], 
@@ -1612,7 +1687,14 @@ const DaftarHadirView = ({ pesertaList, cabangLomba, settings, darkMode }: { pes
     });
 
     // Footer
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    let finalY = (doc as any).lastAutoTable.finalY + 15;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // Check if there is enough space for the signatures (need about 50 units)
+    if (finalY + 50 > pageHeight) {
+      doc.addPage();
+      finalY = 20; // reset Y to top of new page
+    }
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
@@ -1621,7 +1703,7 @@ const DaftarHadirView = ({ pesertaList, cabangLomba, settings, darkMode }: { pes
     
     // Signatures
     const sigY = finalY + 10;
-    doc.text("Ketua FLS2N-SD Kec. Beji", rightColX, sigY + 5);
+    doc.text("Ketua FLS3N-SD Kec. Beji", rightColX, sigY + 5);
     
     const nameY = sigY + 30;
     doc.setFont("helvetica", "bold");
@@ -1678,7 +1760,7 @@ const DaftarHadirView = ({ pesertaList, cabangLomba, settings, darkMode }: { pes
         darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
       }`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-16 text-center">No. Urut</th>
@@ -2183,7 +2265,7 @@ const SertifikatJuaraView = ({ pesertaList, cabangLomba, settings, darkMode }: {
 
       <div className={`rounded-2xl border overflow-hidden shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left min-w-[800px]">
             <thead className={`text-xs uppercase ${darkMode ? 'bg-slate-800/50 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
               <tr>
                 <th className="px-6 py-4 font-bold">No</th>
@@ -2922,7 +3004,7 @@ const PlaceholderView = ({ title, darkMode }: { title: string, darkMode: boolean
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [activeView, setActiveView] = useState<View>('Dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPeserta, setEditingPeserta] = useState<Peserta | null>(null);
@@ -3261,6 +3343,21 @@ export default function App() {
     setFormData({ school: schoolList[0] || '', name: '', birthInfo: '', category: cabangLomba[0] || '' });
   };
 
+  const handleExportCSV = () => {
+    const dataToExport = filteredPeserta.map((p, index) => ({
+      'No. Urut': index + 1,
+      'Nama Sekolah': p.school,
+      'Nama Peserta': p.name,
+      'Tempat Tgl Lahir': p.birthInfo || '',
+      'Cabang Lomba': p.category
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Data Peserta");
+    XLSX.writeFile(wb, "Data_Peserta_FLS3N.csv");
+  };
+
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -3363,6 +3460,7 @@ export default function App() {
           onEditClick={openEditModal}
           onDeleteClick={handleDeletePeserta}
           onImportCSV={handleImportCSV}
+          onExportCSV={handleExportCSV}
           schoolFilter={schoolFilter}
           onSchoolFilterChange={setSchoolFilter}
           categoryFilter={categoryFilter}
@@ -3559,6 +3657,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Mobile Sidebar Overlay (Removed since sidebar is always visible) */}
+
       {/* Sidebar */}
       <aside 
         className={`fixed inset-y-0 left-0 z-50 transition-all duration-500 ease-in-out border-r ${
@@ -3566,13 +3666,15 @@ export default function App() {
             ? 'bg-slate-900 border-slate-800' 
             : 'bg-white border-slate-100 shadow-xl'
         } ${
-          sidebarOpen ? 'w-72' : '-translate-x-full lg:translate-x-0 lg:w-20'
+          sidebarOpen ? 'translate-x-0 w-72' : 'translate-x-0 w-20'
         }`}
       >
         <div className="h-full flex flex-col">
           {/* Logo Section with distinct background */}
-          <div className="p-6">
-            <div className={`flex items-center gap-4 p-4 rounded-3xl border ${
+          <div className={`p-6 ${!sidebarOpen ? 'px-4' : ''}`}>
+            <div className={`flex items-center gap-4 p-4 rounded-3xl border relative ${
+              !sidebarOpen ? 'p-2 justify-center flex-col gap-2' : ''
+            } ${
               darkMode 
                 ? 'bg-slate-800/50 border-slate-700 shadow-lg' 
                 : 'bg-indigo-50 border-indigo-100 shadow-sm'
@@ -3580,25 +3682,44 @@ export default function App() {
               <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-2xl shadow-indigo-500/20 shrink-0 overflow-hidden border border-white/20">
                 <img src="https://pusatprestasinasional.kemendikdasmen.go.id/uploads/event/cOKxdgS0KQhv9FlzGXeJin7A4hX8T6JaIwK3Evy1.png" alt="Logo Aplikasi" className="w-full h-full object-contain p-1.5" />
               </div>
-              {sidebarOpen && (
-                <div className="overflow-hidden whitespace-nowrap">
-                  <h1 className={`font-black text-xl tracking-tighter ${darkMode ? 'text-white' : 'text-slate-900'}`}>FLS3N-SD</h1>
-                  <p className={`text-[10px] font-bold uppercase tracking-[0.2em] mt-0.5 ${darkMode ? 'text-indigo-300' : 'text-indigo-600'}`}>Kecamatan Beji</p>
-                </div>
+              {sidebarOpen ? (
+                <>
+                  <div className="overflow-hidden whitespace-nowrap flex-1">
+                    <h1 className={`font-black text-xl tracking-tighter ${darkMode ? 'text-white' : 'text-slate-900'}`}>FLS3N-SD</h1>
+                    <p className={`text-[10px] font-bold uppercase tracking-[0.2em] mt-0.5 ${darkMode ? 'text-indigo-300' : 'text-indigo-600'}`}>Kecamatan Beji</p>
+                  </div>
+                  <button 
+                    onClick={() => setSidebarOpen(false)}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-indigo-100 hover:text-indigo-600'
+                    }`}
+                  >
+                    <X size={20} />
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => setSidebarOpen(true)}
+                  className={`p-1.5 rounded-lg transition-colors mt-2 ${
+                    darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-indigo-100 hover:text-indigo-600'
+                  }`}
+                >
+                  <Menu size={20} />
+                </button>
               )}
             </div>
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar">
-            <NavItem icon={LayoutDashboard} label="Dashboard" active={activeView === 'Dashboard'} onClick={() => setActiveView('Dashboard')} darkMode={darkMode} />
-            <NavItem icon={UserRound} label="Data Peserta" active={activeView === 'Data Peserta'} onClick={() => setActiveView('Data Peserta')} darkMode={darkMode} />
-            <NavItem icon={FileText} label="Daftar Hadir" active={activeView === 'Daftar Hadir'} onClick={() => setActiveView('Daftar Hadir')} darkMode={darkMode} />
-            <NavItem icon={Binary} label="Nomor Tampilan" active={activeView === 'Nomor Tampilan'} onClick={() => setActiveView('Nomor Tampilan')} darkMode={darkMode} />
-            <NavItem icon={Award} label="Penilaian" active={activeView === 'Penilaian'} onClick={() => setActiveView('Penilaian')} darkMode={darkMode} />
-            <NavItem icon={BarChart3} label="Laporan" active={activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman'} onClick={() => setActiveView('Rekap Nilai')} darkMode={darkMode} />
+            <NavItem icon={LayoutDashboard} label="Dashboard" active={activeView === 'Dashboard'} onClick={() => setActiveView('Dashboard')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+            <NavItem icon={UserRound} label="Data Peserta" active={activeView === 'Data Peserta'} onClick={() => setActiveView('Data Peserta')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+            <NavItem icon={FileText} label="Daftar Hadir" active={activeView === 'Daftar Hadir'} onClick={() => setActiveView('Daftar Hadir')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+            <NavItem icon={Binary} label="Nomor Tampilan" active={activeView === 'Nomor Tampilan'} onClick={() => setActiveView('Nomor Tampilan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+            <NavItem icon={Award} label="Penilaian" active={activeView === 'Penilaian'} onClick={() => setActiveView('Penilaian')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+            <NavItem icon={BarChart3} label="Laporan" active={activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman'} onClick={() => setActiveView('Rekap Nilai')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
             <AnimatePresence>
-              {(activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman') && (
+              {(activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman') && sidebarOpen && (
                 <motion.div 
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -3613,9 +3734,9 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <NavItem icon={Printer} label="Cetak" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} />
+            <NavItem icon={Printer} label="Cetak" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
             <AnimatePresence>
-              {(activeView === 'Sertifikat') && (
+              {(activeView === 'Sertifikat') && sidebarOpen && (
                 <motion.div 
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -3629,7 +3750,7 @@ export default function App() {
               )}
             </AnimatePresence>
             <div className="pt-6 mt-6 border-t border-white/10">
-              <NavItem icon={Settings2} label="Pengaturan" active={activeView === 'Pengaturan'} onClick={() => setActiveView('Pengaturan')} darkMode={darkMode} />
+              <NavItem icon={Settings2} label="Pengaturan" active={activeView === 'Pengaturan'} onClick={() => setActiveView('Pengaturan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
             </div>
           </nav>
         </div>
@@ -3638,20 +3759,14 @@ export default function App() {
       {/* Main Content */}
       <main 
         className={`flex-1 transition-all duration-300 ${
-          sidebarOpen ? 'lg:ml-72' : 'lg:ml-20'
+          sidebarOpen ? 'ml-72' : 'ml-20'
         }`}
       >
         {/* Header */}
-        <header className={`sticky top-0 z-40 backdrop-blur-md transition-colors duration-300 px-8 py-4 flex items-center justify-between ${
+        <header className={`sticky top-0 z-40 backdrop-blur-md transition-colors duration-300 px-4 sm:px-8 py-4 flex items-center justify-between ${
           darkMode ? 'bg-[#1e222d]/80' : 'bg-white/80 shadow-sm'
         }`}>
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
-            >
-              <Menu size={20} />
-            </button>
             <h2 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{activeView}</h2>
           </div>
 
