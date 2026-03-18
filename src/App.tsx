@@ -73,7 +73,7 @@ interface AppSettings {
   coordinatorNip: string;
   headOfDepartmentName: string;
   headOfDepartmentNip: string;
-  categoryJudges: Record<string, { name: string, nip: string }>;
+  categoryJudges: Record<string, { name: string, nip: string, name2?: string, nip2?: string }>;
   logoKabupaten?: string;
   logoFLS3N?: string;
 }
@@ -1434,8 +1434,12 @@ const RekapPerCabangView = ({ pesertaList, schoolList, cabangLomba, settings, da
     let finalY = (doc as any).lastAutoTable.finalY + 15;
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    // Check if there is enough space for the signatures (need about 50 units)
-    if (finalY + 50 > pageHeight) {
+    const catJudge = settings.categoryJudges[selectedCategory] || { name: '..........................', nip: '..........................', name2: '', nip2: '' };
+    const hasJuri2 = !!catJudge.name2;
+    
+    // Check if there is enough space for the signatures
+    const requiredSpace = 110;
+    if (finalY + requiredSpace > pageHeight) {
       doc.addPage();
       finalY = 20; // reset Y to top of new page
     }
@@ -1446,38 +1450,93 @@ const RekapPerCabangView = ({ pesertaList, schoolList, cabangLomba, settings, da
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     
-    const rightColX = pageWidth - 80;
+    const rightColX = pageWidth - 40;
+    const leftColX = 40;
+    const middleColX = pageWidth / 2;
 
     // Right side date
-    doc.text(dateStr, rightColX, finalY);
+    doc.text(dateStr, rightColX, finalY, { align: "center" });
     
     // Signatures
     const sigY = finalY + 10;
-    doc.text("Mengetahui", 20, sigY);
-    doc.text("Ketua FLS3N-SD Kec. Beji", 20, sigY + 5);
-    
-    const catJudgeName = selectedCategory === 'Semua Cabang Lomba' ? 'Juri' : `Juri (${selectedCategory})`;
-    doc.text(catJudgeName, rightColX, sigY + 5);
-    
-    const nameY = sigY + 30;
-    doc.setFont("helvetica", "bold");
-    
-    // Left side: Ketua FLS3N (General Judge from settings)
-    doc.text(settings.judgeName, 20, nameY);
-    const nameWidth = doc.getTextWidth(settings.judgeName);
-    doc.line(20, nameY + 1, 20 + nameWidth, nameY + 1);
-    
-    // Right side: Specific Category Judge
-    const catJudge = settings.categoryJudges[selectedCategory] || { name: '..........................', nip: '..........................' };
-    doc.text(catJudge.name, rightColX, nameY);
-    const catJudgeWidth = doc.getTextWidth(catJudge.name);
-    if (catJudge.name && catJudge.name !== '..........................') {
-      doc.line(rightColX, nameY + 1, rightColX + catJudgeWidth, nameY + 1);
+
+    if (hasJuri2) {
+      const catJudgeName = selectedCategory === 'Semua Cabang Lomba' ? 'Juri 1' : `Juri 1 (${selectedCategory})`;
+      const catJudgeName2 = selectedCategory === 'Semua Cabang Lomba' ? 'Juri 2' : `Juri 2 (${selectedCategory})`;
+      
+      // Juri 1 (Kiri)
+      doc.text(catJudgeName, leftColX, sigY + 5, { align: "center" });
+      
+      // Juri 2 (Kanan)
+      doc.text(catJudgeName2, rightColX, sigY + 5, { align: "center" });
+      
+      const nameY = sigY + 30;
+      doc.setFont("helvetica", "bold");
+      
+      // Juri 1 Name
+      doc.text(catJudge.name, leftColX, nameY, { align: "center" });
+      const catJudgeWidth = doc.getTextWidth(catJudge.name);
+      if (catJudge.name && catJudge.name !== '..........................') {
+        doc.line(leftColX - catJudgeWidth / 2, nameY + 1, leftColX + catJudgeWidth / 2, nameY + 1);
+      }
+      
+      // Juri 2 Name
+      doc.text(catJudge.name2, rightColX, nameY, { align: "center" });
+      const catJudgeWidth2 = doc.getTextWidth(catJudge.name2);
+      doc.line(rightColX - catJudgeWidth2 / 2, nameY + 1, rightColX + catJudgeWidth2 / 2, nameY + 1);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text(`NIP. ${catJudge.nip || '..........................'}`, leftColX, nameY + 5, { align: "center" });
+      doc.text(`NIP. ${catJudge.nip2 || '..........................'}`, rightColX, nameY + 5, { align: "center" });
+
+      // Ketua FLS3N (Tengah Bawah)
+      const ketuaY = nameY + 20;
+      doc.text("Mengetahui", middleColX, ketuaY, { align: "center" });
+      doc.text("Ketua FLS3N-SD Kec. Beji", middleColX, ketuaY + 5, { align: "center" });
+      
+      const ketuaNameY = ketuaY + 30;
+      doc.setFont("helvetica", "bold");
+      doc.text(settings.judgeName, middleColX, ketuaNameY, { align: "center" });
+      const nameWidth = doc.getTextWidth(settings.judgeName);
+      doc.line(middleColX - nameWidth / 2, ketuaNameY + 1, middleColX + nameWidth / 2, ketuaNameY + 1);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text(`NIP. ${settings.judgeNip}`, middleColX, ketuaNameY + 5, { align: "center" });
+
+    } else {
+      // Fallback if no Juri 2 (Juri 1 Kiri, Ketua Tengah Bawah)
+      const catJudgeName = selectedCategory === 'Semua Cabang Lomba' ? 'Juri 1' : `Juri 1 (${selectedCategory})`;
+      
+      // Juri 1 (Kiri)
+      doc.text(catJudgeName, leftColX, sigY + 5, { align: "center" });
+      
+      const nameY = sigY + 30;
+      doc.setFont("helvetica", "bold");
+      
+      // Juri 1 Name
+      doc.text(catJudge.name, leftColX, nameY, { align: "center" });
+      const catJudgeWidth = doc.getTextWidth(catJudge.name);
+      if (catJudge.name && catJudge.name !== '..........................') {
+        doc.line(leftColX - catJudgeWidth / 2, nameY + 1, leftColX + catJudgeWidth / 2, nameY + 1);
+      }
+      
+      doc.setFont("helvetica", "normal");
+      doc.text(`NIP. ${catJudge.nip || '..........................'}`, leftColX, nameY + 5, { align: "center" });
+
+      // Ketua FLS3N (Tengah Bawah)
+      const ketuaY = nameY + 20;
+      doc.text("Mengetahui", middleColX, ketuaY, { align: "center" });
+      doc.text("Ketua FLS3N-SD Kec. Beji", middleColX, ketuaY + 5, { align: "center" });
+      
+      const ketuaNameY = ketuaY + 30;
+      doc.setFont("helvetica", "bold");
+      doc.text(settings.judgeName, middleColX, ketuaNameY, { align: "center" });
+      const nameWidth = doc.getTextWidth(settings.judgeName);
+      doc.line(middleColX - nameWidth / 2, ketuaNameY + 1, middleColX + nameWidth / 2, ketuaNameY + 1);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text(`NIP. ${settings.judgeNip}`, middleColX, ketuaNameY + 5, { align: "center" });
     }
-    
-    doc.setFont("helvetica", "normal");
-    doc.text(`NIP. ${settings.judgeNip}`, 20, nameY + 5);
-    doc.text(`NIP. ${catJudge.nip || '..........................'}`, rightColX, nameY + 5);
 
     doc.save(`Rekap_${selectedCategory.replace(/\s+/g, '_')}.pdf`);
   };
@@ -1972,8 +2031,8 @@ const PengumumanView = ({ pesertaList, schoolList, cabangLomba, settings, darkMo
 
     currentY = (doc as any).lastAutoTable.finalY + 5;
     
-    // Check if we need a new page for signatures
-    if (currentY > doc.internal.pageSize.getHeight() - 80) {
+    // Check if we need a new page for signatures (needs about 100 units)
+    if (currentY > doc.internal.pageSize.getHeight() - 100) {
       doc.addPage();
       currentY = 20;
     }
@@ -1993,20 +2052,48 @@ const PengumumanView = ({ pesertaList, schoolList, cabangLomba, settings, darkMo
     doc.text(dateStr, pageWidth - 15, currentY, { align: "right" });
     currentY += 8;
     
-    doc.text("Ketua KKKSD", 45, currentY, { align: "center" });
-    doc.text("Ketua FLS3N-SD", pageWidth - 45, currentY, { align: "center" });
+    const displayJudgeName2 = (selectedCategory !== 'Semua Cabang Lomba' && settings.categoryJudges[selectedCategory]?.name2) 
+      ? settings.categoryJudges[selectedCategory].name2 
+      : '';
+    const displayJudgeNip2 = (selectedCategory !== 'Semua Cabang Lomba' && settings.categoryJudges[selectedCategory]?.nip2) 
+      ? settings.categoryJudges[selectedCategory].nip2 
+      : '';
+
+    const leftColX = 45;
+    const rightColX = pageWidth - 45;
+    const middleColX = pageWidth / 2;
+
+    doc.text("Ketua KKKSD", leftColX, currentY, { align: "center" });
+    if (displayJudgeName2) {
+      doc.text("Juri 2", middleColX, currentY, { align: "center" });
+      doc.text("Juri 1", rightColX, currentY, { align: "center" });
+    } else if (selectedCategory !== 'Semua Cabang Lomba') {
+      doc.text("Juri 1", rightColX, currentY, { align: "center" });
+    } else {
+      doc.text("Ketua FLS3N-SD", rightColX, currentY, { align: "center" });
+    }
+    
     currentY += 5;
-    doc.text("Kecamatan Beji", 45, currentY, { align: "center" });
-    doc.text("Kecamatan Beji", pageWidth - 45, currentY, { align: "center" });
+    doc.text("Kecamatan Beji", leftColX, currentY, { align: "center" });
+    if (!displayJudgeName2 && selectedCategory === 'Semua Cabang Lomba') {
+      doc.text("Kecamatan Beji", rightColX, currentY, { align: "center" });
+    }
 
     const sigNameY = currentY + 20;
     doc.setFont("helvetica", "bold");
     
     // Left Signature
-    doc.text(settings.kkksChairmanName, 45, sigNameY, { align: "center" });
+    doc.text(settings.kkksChairmanName, leftColX, sigNameY, { align: "center" });
     const kkksNameWidth = doc.getTextWidth(settings.kkksChairmanName);
-    doc.line(45 - kkksNameWidth/2, sigNameY + 1, 45 + kkksNameWidth/2, sigNameY + 1);
+    doc.line(leftColX - kkksNameWidth/2, sigNameY + 1, leftColX + kkksNameWidth/2, sigNameY + 1);
     
+    // Middle Signature (Juri 2)
+    if (displayJudgeName2) {
+      doc.text(displayJudgeName2, middleColX, sigNameY, { align: "center" });
+      const judgeNameWidth2 = doc.getTextWidth(displayJudgeName2);
+      doc.line(middleColX - judgeNameWidth2/2, sigNameY + 1, middleColX + judgeNameWidth2/2, sigNameY + 1);
+    }
+
     // Right Signature
     const displayJudgeName = (selectedCategory !== 'Semua Cabang Lomba' && settings.categoryJudges[selectedCategory]?.name) 
       ? settings.categoryJudges[selectedCategory].name 
@@ -2015,13 +2102,16 @@ const PengumumanView = ({ pesertaList, schoolList, cabangLomba, settings, darkMo
       ? settings.categoryJudges[selectedCategory].nip 
       : settings.judgeNip;
 
-    doc.text(displayJudgeName, pageWidth - 45, sigNameY, { align: "center" });
+    doc.text(displayJudgeName, rightColX, sigNameY, { align: "center" });
     const judgeNameWidth = doc.getTextWidth(displayJudgeName);
-    doc.line(pageWidth - 45 - judgeNameWidth/2, sigNameY + 1, pageWidth - 45 + judgeNameWidth/2, sigNameY + 1);
+    doc.line(rightColX - judgeNameWidth/2, sigNameY + 1, rightColX + judgeNameWidth/2, sigNameY + 1);
 
     doc.setFont("helvetica", "normal");
-    doc.text(`NIP. ${settings.kkksChairmanNip}`, 45, sigNameY + 5, { align: "center" });
-    doc.text(`NIP. ${displayJudgeNip}`, pageWidth - 45, sigNameY + 5, { align: "center" });
+    doc.text(`NIP. ${settings.kkksChairmanNip}`, leftColX, sigNameY + 5, { align: "center" });
+    if (displayJudgeName2) {
+      doc.text(`NIP. ${displayJudgeNip2}`, middleColX, sigNameY + 5, { align: "center" });
+    }
+    doc.text(`NIP. ${displayJudgeNip}`, rightColX, sigNameY + 5, { align: "center" });
 
     currentY = sigNameY + 10;
     doc.text("Mengetahui,", pageWidth / 2, currentY, { align: "center" });
@@ -2546,10 +2636,10 @@ const PengaturanView = ({
     onSaveSettings();
   };
 
-  const updateCategoryJudge = (category: string, field: 'name' | 'nip', value: string) => {
+  const updateCategoryJudge = (category: string, field: 'name' | 'nip' | 'name2' | 'nip2', value: string) => {
     const newCategoryJudges = { ...settings.categoryJudges };
     if (!newCategoryJudges[category]) {
-      newCategoryJudges[category] = { name: '', nip: '' };
+      newCategoryJudges[category] = { name: '', nip: '', name2: '', nip2: '' };
     }
     newCategoryJudges[category][field] = value;
     setSettings({ ...settings, categoryJudges: newCategoryJudges });
@@ -2788,24 +2878,48 @@ const PengaturanView = ({
                 <h5 className={`text-sm font-bold ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{cat}</h5>
                 <div className="space-y-2">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Nama Juri</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Nama Juri 1</label>
                     <input 
                       type="text" 
                       value={settings.categoryJudges[cat]?.name || ''}
                       onChange={(e) => updateCategoryJudge(cat, 'name', e.target.value)}
-                      placeholder="Nama Juri..."
+                      placeholder="Nama Juri 1..."
                       className={`w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-rose-500 ${
                         darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-black'
                       }`}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">NIP Juri</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">NIP Juri 1</label>
                     <input 
                       type="text" 
                       value={settings.categoryJudges[cat]?.nip || ''}
                       onChange={(e) => updateCategoryJudge(cat, 'nip', e.target.value)}
-                      placeholder="NIP Juri..."
+                      placeholder="NIP Juri 1..."
+                      className={`w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-rose-500 ${
+                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-black'
+                      }`}
+                    />
+                  </div>
+                  <div className="space-y-1 mt-4">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Nama Juri 2</label>
+                    <input 
+                      type="text" 
+                      value={settings.categoryJudges[cat]?.name2 || ''}
+                      onChange={(e) => updateCategoryJudge(cat, 'name2', e.target.value)}
+                      placeholder="Nama Juri 2..."
+                      className={`w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-rose-500 ${
+                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-black'
+                      }`}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">NIP Juri 2</label>
+                    <input 
+                      type="text" 
+                      value={settings.categoryJudges[cat]?.nip2 || ''}
+                      onChange={(e) => updateCategoryJudge(cat, 'nip2', e.target.value)}
+                      placeholder="NIP Juri 2..."
                       className={`w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-rose-500 ${
                         darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-black'
                       }`}
