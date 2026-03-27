@@ -41,7 +41,8 @@ import {
   Pie, 
   Cell,
   LineChart,
-  Line
+  Line,
+  Legend
 } from 'recharts';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -240,10 +241,15 @@ const DashboardView = ({
   const totalSekolah = schoolList.length;
 
   // Data for Category Distribution
-  const categoryData = cabangLomba.map(cat => ({
-    name: cat,
-    peserta: pesertaList.filter(p => p.category === cat).length
-  })).sort((a, b) => b.peserta - a.peserta);
+  const categoryData = cabangLomba.map(cat => {
+    const pesertaInCat = pesertaList.filter(p => p.category === cat);
+    const uniqueSchoolsInCat = new Set(pesertaInCat.map(p => p.school)).size;
+    return {
+      name: cat,
+      peserta: pesertaInCat.length,
+      sekolah: uniqueSchoolsInCat
+    };
+  }).sort((a, b) => b.peserta - a.peserta);
 
   // Data for Scoring Progress
   const judgedCount = pesertaList.filter(p => p.scores && p.scores.some(s => s !== '' && s !== 0)).length;
@@ -388,13 +394,12 @@ const DashboardView = ({
         {/* Category Distribution Chart */}
         <div className={`lg:col-span-2 p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
           <div className="flex justify-between items-center mb-6">
-            <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Distribusi Peserta per Cabang</h3>
-            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Jumlah Peserta</div>
+            <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Distribusi Lembaga & Peserta per Cabang</h3>
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#334155' : '#f1f5f9'} />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
@@ -404,14 +409,18 @@ const DashboardView = ({
                 />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
                 <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  cursor={{ fill: darkMode ? '#1e293b' : '#f8fafc' }}
+                  contentStyle={{ 
+                    borderRadius: '12px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    backgroundColor: darkMode ? '#0f172a' : '#ffffff',
+                    color: darkMode ? '#f8fafc' : '#0f172a'
+                  }}
                 />
-                <Bar dataKey="peserta" radius={[6, 6, 0, 0]} barSize={40}>
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
-                  ))}
-                </Bar>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                <Bar name="Jumlah Lembaga" dataKey="sekolah" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20} />
+                <Bar name="Jumlah Peserta" dataKey="peserta" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -581,13 +590,14 @@ const DashboardView = ({
 
       {/* Participant Count per Category */}
       <div className="space-y-6 mt-8">
-        <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Jumlah Peserta per Cabang Lomba</h3>
+        <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Jumlah Lembaga & Peserta per Cabang Lomba</h3>
         <div className={`rounded-2xl border shadow-sm overflow-hidden ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[500px]">
               <thead>
                 <tr className={`${darkMode ? 'bg-slate-800/50 border-b border-slate-800' : 'bg-slate-50 border-b border-slate-100'}`}>
                   <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Cabang Lomba</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Jumlah Lembaga</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Jumlah Peserta</th>
                 </tr>
               </thead>
@@ -597,6 +607,9 @@ const DashboardView = ({
                     <td className={`px-6 py-4 text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                       {cat.name}
                     </td>
+                    <td className={`px-6 py-4 text-sm font-bold text-right ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                      {cat.sekolah} Lembaga
+                    </td>
                     <td className={`px-6 py-4 text-sm font-bold text-right ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                       {cat.peserta} Peserta
                     </td>
@@ -605,6 +618,9 @@ const DashboardView = ({
                 <tr className={`${darkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
                   <td className={`px-6 py-4 text-sm font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                     Total Keseluruhan
+                  </td>
+                  <td className={`px-6 py-4 text-sm font-black text-right ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                    {totalSekolah} Lembaga
                   </td>
                   <td className={`px-6 py-4 text-sm font-black text-right ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                     {totalPeserta} Peserta
@@ -633,7 +649,8 @@ const DataPesertaView = ({
   onResetFilters,
   schoolList,
   cabangLomba,
-  darkMode
+  darkMode,
+  isAdmin
 }: { 
   pesertaList: Peserta[], 
   onAddClick: () => void,
@@ -648,7 +665,8 @@ const DataPesertaView = ({
   onResetFilters: () => void,
   schoolList: string[],
   cabangLomba: string[],
-  darkMode?: boolean
+  darkMode?: boolean,
+  isAdmin: boolean
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -700,31 +718,35 @@ const DataPesertaView = ({
           >
             <RotateCcw size={20} />
           </button>
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={onImportCSV} 
-            accept=".csv" 
-            className="hidden" 
-          />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
-          >
-            <FileDown size={16} /> Import CSV
-          </button>
-          <button 
-            onClick={onExportCSV}
-            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
-          >
-            <FileUp size={16} /> Export CSV
-          </button>
-          <button 
-            onClick={onAddClick}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
-          >
-            <Plus size={16} /> Tambah
-          </button>
+          {isAdmin && (
+            <>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={onImportCSV} 
+                accept=".csv" 
+                className="hidden" 
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
+              >
+                <FileDown size={16} /> Import CSV
+              </button>
+              <button 
+                onClick={onExportCSV}
+                className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
+              >
+                <FileUp size={16} /> Export CSV
+              </button>
+              <button 
+                onClick={onAddClick}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
+              >
+                <Plus size={16} /> Tambah
+              </button>
+            </>
+          )}
         </div>
       </div>
       <div className={`rounded-2xl border shadow-sm overflow-hidden ${
@@ -739,13 +761,13 @@ const DataPesertaView = ({
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Peserta</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Tempat Tgl Lahir</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Cabang Lomba</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Aksi</th>
+                {isAdmin && <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Aksi</th>}
               </tr>
             </thead>
             <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
               {pesertaList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className={`px-6 py-12 text-center text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  <td colSpan={isAdmin ? 6 : 5} className={`px-6 py-12 text-center text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                     Belum ada data peserta yang terdaftar atau sesuai filter.
                   </td>
                 </tr>
@@ -766,28 +788,30 @@ const DataPesertaView = ({
                     </td>
                     <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{peserta.birthInfo}</td>
                     <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{peserta.category}</td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => onEditClick(peserta)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            darkMode ? 'text-slate-400 hover:text-blue-400 hover:bg-slate-800' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
-                          }`}
-                          title="Edit Peserta"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => onDeleteClick(peserta.id)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            darkMode ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                          }`}
-                          title="Hapus Peserta"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => onEditClick(peserta)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              darkMode ? 'text-slate-400 hover:text-blue-400 hover:bg-slate-800' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                            }`}
+                            title="Edit Peserta"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => onDeleteClick(peserta.id)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              darkMode ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                            }`}
+                            title="Hapus Peserta"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -823,14 +847,16 @@ const NomorTampilanView = ({
   categoryFilter,
   onCategoryFilterChange,
   cabangLomba,
-  darkMode
+  darkMode,
+  isAdmin
 }: { 
   pesertaList: Peserta[], 
   onUpdateDisplayNumber: (id: string, value: string) => void,
   categoryFilter: string,
   onCategoryFilterChange: (category: string) => void,
   cabangLomba: string[],
-  darkMode?: boolean
+  darkMode?: boolean,
+  isAdmin: boolean
 }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const uniquePesertaList = getUniqueSchoolParticipants(pesertaList);
@@ -880,12 +906,12 @@ const NomorTampilanView = ({
           </div>
           <button 
             onClick={handleSave}
-            disabled={showSuccess}
+            disabled={showSuccess || !isAdmin}
             className={`${
               showSuccess 
                 ? (darkMode ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-teal-50 text-teal-600 border-teal-200') 
                 : 'bg-teal-600 text-white border-transparent'
-            } border px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap shadow-sm active:scale-95 disabled:cursor-default`}
+            } border px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap shadow-sm active:scale-95 disabled:cursor-default disabled:opacity-50`}
           >
             {showSuccess ? (
               <>
@@ -923,10 +949,11 @@ const NomorTampilanView = ({
                     type="number" 
                     value={peserta.displayNumber ?? ''}
                     onChange={(e) => onUpdateDisplayNumber(peserta.id, e.target.value)}
+                    disabled={!isAdmin}
                     placeholder="Input No."
                     className={`w-full px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold ${
                       darkMode ? 'bg-slate-800 border-slate-700 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-700'
-                    }`}
+                    } disabled:opacity-50`}
                   />
                 </td>
               </tr>
@@ -952,14 +979,16 @@ const PenilaianView = ({
   categoryFilter,
   onCategoryFilterChange,
   cabangLomba,
-  darkMode
+  darkMode,
+  isAdmin
 }: { 
   pesertaList: Peserta[], 
   onUpdateScore: (id: string, index: number, value: string) => void,
   categoryFilter: string,
   onCategoryFilterChange: (category: string) => void,
   cabangLomba: string[],
-  darkMode?: boolean
+  darkMode?: boolean,
+  isAdmin: boolean
 }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const uniquePesertaList = getUniqueSchoolParticipants(pesertaList);
@@ -1038,12 +1067,12 @@ const PenilaianView = ({
           </div>
           <button 
             onClick={handleSave}
-            disabled={showSuccess}
+            disabled={showSuccess || !isAdmin}
             className={`${
               showSuccess 
                 ? (darkMode ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-teal-50 text-teal-600 border-teal-200') 
                 : 'bg-teal-600 text-white border-transparent'
-            } border px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap shadow-sm active:scale-95 disabled:cursor-default`}
+            } border px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap shadow-sm active:scale-95 disabled:cursor-default disabled:opacity-50`}
           >
             {showSuccess ? (
               <>
@@ -1089,9 +1118,10 @@ const PenilaianView = ({
                       value={peserta.scores?.[0] ?? ''}
                       onChange={(e) => onUpdateScore(peserta.id, 0, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 0)}
+                      disabled={!isAdmin}
                       className={`w-full px-2 py-1 border rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
                         darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-black'
-                      }`}
+                      } disabled:opacity-50`}
                     />
                   </td>
                   <td className="px-4 py-4">
@@ -1101,9 +1131,10 @@ const PenilaianView = ({
                       value={peserta.scores?.[1] ?? ''}
                       onChange={(e) => onUpdateScore(peserta.id, 1, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 1)}
+                      disabled={!isAdmin}
                       className={`w-full px-2 py-1 border rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
                         darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-black'
-                      }`}
+                      } disabled:opacity-50`}
                     />
                   </td>
                   <td className="px-4 py-4">
@@ -1113,9 +1144,10 @@ const PenilaianView = ({
                       value={peserta.scores?.[2] ?? ''}
                       onChange={(e) => onUpdateScore(peserta.id, 2, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 2)}
+                      disabled={!isAdmin}
                       className={`w-full px-2 py-1 border rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
                         darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-black'
-                      }`}
+                      } disabled:opacity-50`}
                     />
                   </td>
                   <td className={`px-4 py-4 text-sm font-bold text-center ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
@@ -3117,7 +3149,10 @@ const PlaceholderView = ({ title, darkMode }: { title: string, darkMode: boolean
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
-  const [activeView, setActiveView] = useState<View>('Dashboard');
+  const [activeView, setActiveView] = useState<View>(() => {
+    const savedView = localStorage.getItem('activeView');
+    return (savedView as View) || 'Dashboard';
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -3125,6 +3160,21 @@ export default function App() {
   const [schoolFilter, setSchoolFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return localStorage.getItem('isAdmin') === 'true';
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  
+  // Save activeView to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('activeView', activeView);
+  }, [activeView]);
+  
+  useEffect(() => {
+    localStorage.setItem('isAdmin', String(isAdmin));
+  }, [isAdmin]);
   
   const [schoolList, setSchoolList] = useState<string[]>([...SCHOOL_LIST]);
   const [cabangLomba, setCabangLomba] = useState<string[]>([...CABANG_LOMBA]);
@@ -3586,6 +3636,7 @@ export default function App() {
           schoolList={schoolList}
           cabangLomba={cabangLomba}
           darkMode={darkMode}
+          isAdmin={isAdmin}
         />
       );
       case 'Nomor Tampilan': return (
@@ -3596,6 +3647,7 @@ export default function App() {
           onCategoryFilterChange={setCategoryFilter}
           cabangLomba={cabangLomba}
           darkMode={darkMode}
+          isAdmin={isAdmin}
         />
       );
       case 'Penilaian': return (
@@ -3606,6 +3658,7 @@ export default function App() {
           onCategoryFilterChange={setCategoryFilter}
           cabangLomba={cabangLomba}
           darkMode={darkMode}
+          isAdmin={isAdmin}
         />
       );
       case 'Rekap Nilai': return (
@@ -3641,6 +3694,75 @@ export default function App() {
 
   return (
     <div className={`min-h-screen font-sans flex transition-colors duration-300 ${darkMode ? 'bg-[#0f1117] text-slate-100 dark' : 'bg-slate-50 text-slate-900'}`}>
+      {/* Login Modal */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLoginModal(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={`relative w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden ${darkMode ? 'bg-slate-900' : 'bg-white'}`}
+            >
+              <div className={`p-6 border-b flex items-center justify-between ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                  Login Admin
+                </h3>
+                <button onClick={() => setShowLoginModal(false)} className={`p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-400'}`}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Password</label>
+                  <input 
+                    type="password" 
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (passwordInput === '12345') {
+                          setIsAdmin(true);
+                          setShowLoginModal(false);
+                          setPasswordInput('');
+                        } else {
+                          alert('Password salah!');
+                        }
+                      }
+                    }}
+                    className={`w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                    }`}
+                    placeholder="Masukkan password..."
+                  />
+                </div>
+                <button 
+                  onClick={() => {
+                    if (passwordInput === '12345') {
+                      setIsAdmin(true);
+                      setShowLoginModal(false);
+                      setPasswordInput('');
+                    } else {
+                      alert('Password salah!');
+                    }
+                  }}
+                  className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
+                >
+                  Login
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Modal */}
       <AnimatePresence>
         {isModalOpen && (
@@ -3863,9 +3985,11 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className="pt-6 mt-6 border-t border-white/10">
-              <NavItem icon={Settings2} label="Pengaturan" active={activeView === 'Pengaturan'} onClick={() => setActiveView('Pengaturan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            </div>
+            {isAdmin && (
+              <div className="pt-6 mt-6 border-t border-white/10">
+                <NavItem icon={Settings2} label="Pengaturan" active={activeView === 'Pengaturan'} onClick={() => setActiveView('Pengaturan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+              </div>
+            )}
           </nav>
         </div>
       </aside>
@@ -3899,9 +4023,17 @@ export default function App() {
                 <p className={`text-sm font-semibold leading-none ${darkMode ? 'text-white' : 'text-slate-900'}`}>Admin Beji</p>
                 <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Koordinator</p>
               </div>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
+              <button 
+                onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                  isAdmin 
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                    : darkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                }`}
+                title={isAdmin ? "Logout" : "Login Admin"}
+              >
                 <User size={20} />
-              </div>
+              </button>
             </div>
           </div>
         </header>
