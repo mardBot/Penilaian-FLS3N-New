@@ -26,7 +26,9 @@ import {
   FileSpreadsheet,
   Plus,
   Printer,
-  FileText
+  FileText,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -4023,17 +4025,29 @@ export default function App() {
                 <p className={`text-sm font-semibold leading-none ${darkMode ? 'text-white' : 'text-slate-900'}`}>Admin Beji</p>
                 <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Koordinator</p>
               </div>
-              <button 
-                onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                  isAdmin 
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
-                    : darkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                }`}
-                title={isAdmin ? "Logout" : "Login Admin"}
-              >
-                <User size={20} />
-              </button>
+              {isAdmin ? (
+                <button 
+                  onClick={() => setIsAdmin(false)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    darkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                  }`}
+                  title="Keluar"
+                >
+                  <LogOut size={16} />
+                  <span className="hidden sm:inline">Keluar</span>
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setShowLoginModal(true)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    darkMode ? 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                  }`}
+                  title="Login Admin"
+                >
+                  <LogIn size={16} />
+                  <span className="hidden sm:inline">Login</span>
+                </button>
+              )}
             </div>
           </div>
         </header>
