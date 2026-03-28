@@ -845,7 +845,7 @@ const getUniqueSchoolParticipants = (pesertaList: Peserta[]) => {
 
 const NomorTampilanView = ({ 
   pesertaList, 
-  onUpdateDisplayNumber,
+  onSaveDisplayNumbers,
   categoryFilter,
   onCategoryFilterChange,
   cabangLomba,
@@ -853,7 +853,7 @@ const NomorTampilanView = ({
   isAdmin
 }: { 
   pesertaList: Peserta[], 
-  onUpdateDisplayNumber: (id: string, value: string) => void,
+  onSaveDisplayNumbers: (editedNumbers: Record<string, string>) => void,
   categoryFilter: string,
   onCategoryFilterChange: (category: string) => void,
   cabangLomba: string[],
@@ -861,9 +861,11 @@ const NomorTampilanView = ({
   isAdmin: boolean
 }) => {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [editedNumbers, setEditedNumbers] = useState<Record<string, string>>({});
   const uniquePesertaList = getUniqueSchoolParticipants(pesertaList);
 
   const handleSave = () => {
+    onSaveDisplayNumbers(editedNumbers);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -949,8 +951,8 @@ const NomorTampilanView = ({
                 <td className="px-6 py-4">
                   <input 
                     type="number" 
-                    value={peserta.displayNumber ?? ''}
-                    onChange={(e) => onUpdateDisplayNumber(peserta.id, e.target.value)}
+                    value={editedNumbers[peserta.id] ?? (peserta.displayNumber || '')}
+                    onChange={(e) => setEditedNumbers({ ...editedNumbers, [peserta.id]: e.target.value })}
                     disabled={!isAdmin}
                     placeholder="Input No."
                     className={`w-full px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold ${
@@ -3176,7 +3178,10 @@ export default function App() {
   
   useEffect(() => {
     localStorage.setItem('isAdmin', String(isAdmin));
-  }, [isAdmin]);
+    if (!isAdmin && activeView !== 'Dashboard' && activeView !== 'Rekap Per-Cabang Lomba') {
+      setActiveView('Dashboard');
+    }
+  }, [isAdmin, activeView]);
   
   const [schoolList, setSchoolList] = useState<string[]>([...SCHOOL_LIST]);
   const [cabangLomba, setCabangLomba] = useState<string[]>([...CABANG_LOMBA]);
@@ -3427,17 +3432,45 @@ export default function App() {
     }
   };
 
-  const handleUpdateDisplayNumber = async (id: string, value: string) => {
-    const p = pesertaList.find(pes => pes.id === id);
-    if (!p) return;
+  const handleSaveDisplayNumbers = async (editedNumbers: Record<string, string>) => {
+    if (Object.keys(editedNumbers).length === 0) return;
 
-    setPesertaList(pesertaList.map(pes => pes.id === id ? { ...pes, displayNumber: value } : pes));
+    // We need to find all participants that should be updated.
+    // If a participant is in Pantomim or Seni Tari, we should update all participants from the same school and category.
+    const updates: { id: string, display_number: string }[] = [];
+    const updatedPesertaList = [...pesertaList];
 
-    const { error } = await supabase.from('peserta').update({ display_number: value }).eq('id', id);
-    if (error) {
-      console.error("Error updating display number:", error);
-      setPesertaList(pesertaList.map(pes => pes.id === id ? { ...pes, displayNumber: p.displayNumber } : pes));
-      alert('Gagal menyimpan nomor tampilan: ' + error.message);
+    for (const [id, value] of Object.entries(editedNumbers)) {
+      const p = pesertaList.find(pes => pes.id === id);
+      if (!p) continue;
+
+      if (p.category === 'Pantomim' || p.category === 'Seni Tari') {
+        // Find all matching participants
+        const matchingPeserta = pesertaList.filter(pes => pes.school === p.school && pes.category === p.category);
+        for (const match of matchingPeserta) {
+          updates.push({ id: match.id, display_number: value });
+          const index = updatedPesertaList.findIndex(pes => pes.id === match.id);
+          if (index !== -1) {
+            updatedPesertaList[index] = { ...updatedPesertaList[index], displayNumber: value };
+          }
+        }
+      } else {
+        updates.push({ id: p.id, display_number: value });
+        const index = updatedPesertaList.findIndex(pes => pes.id === p.id);
+        if (index !== -1) {
+          updatedPesertaList[index] = { ...updatedPesertaList[index], displayNumber: value };
+        }
+      }
+    }
+
+    setPesertaList(updatedPesertaList);
+
+    // Update Supabase
+    for (const update of updates) {
+      const { error } = await supabase.from('peserta').update({ display_number: update.display_number }).eq('id', update.id);
+      if (error) {
+        console.error("Error updating display number:", error);
+      }
     }
   };
 
@@ -3644,7 +3677,7 @@ export default function App() {
       case 'Nomor Tampilan': return (
         <NomorTampilanView 
           pesertaList={filteredPeserta}
-          onUpdateDisplayNumber={handleUpdateDisplayNumber}
+          onSaveDisplayNumbers={handleSaveDisplayNumbers}
           categoryFilter={categoryFilter}
           onCategoryFilterChange={setCategoryFilter}
           cabangLomba={cabangLomba}
@@ -3951,11 +3984,11 @@ export default function App() {
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar">
             <NavItem icon={LayoutDashboard} label="Dashboard" active={activeView === 'Dashboard'} onClick={() => setActiveView('Dashboard')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            <NavItem icon={UserRound} label="Data Peserta" active={activeView === 'Data Peserta'} onClick={() => setActiveView('Data Peserta')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            <NavItem icon={FileText} label="Daftar Hadir" active={activeView === 'Daftar Hadir'} onClick={() => setActiveView('Daftar Hadir')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            <NavItem icon={Binary} label="Nomor Tampilan" active={activeView === 'Nomor Tampilan'} onClick={() => setActiveView('Nomor Tampilan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            <NavItem icon={Award} label="Penilaian" active={activeView === 'Penilaian'} onClick={() => setActiveView('Penilaian')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            <NavItem icon={BarChart3} label="Laporan" active={activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman'} onClick={() => setActiveView('Rekap Nilai')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+            {isAdmin && <NavItem icon={UserRound} label="Data Peserta" active={activeView === 'Data Peserta'} onClick={() => setActiveView('Data Peserta')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+            {isAdmin && <NavItem icon={FileText} label="Daftar Hadir" active={activeView === 'Daftar Hadir'} onClick={() => setActiveView('Daftar Hadir')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+            {isAdmin && <NavItem icon={Binary} label="Nomor Tampilan" active={activeView === 'Nomor Tampilan'} onClick={() => setActiveView('Nomor Tampilan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+            {isAdmin && <NavItem icon={Award} label="Penilaian" active={activeView === 'Penilaian'} onClick={() => setActiveView('Penilaian')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+            <NavItem icon={BarChart3} label="Laporan" active={activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman'} onClick={() => setActiveView(isAdmin ? 'Rekap Nilai' : 'Rekap Per-Cabang Lomba')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
             <AnimatePresence>
               {(activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman') && sidebarOpen && (
                 <motion.div 
@@ -3965,16 +3998,16 @@ export default function App() {
                   className="overflow-hidden"
                 >
                   <div className="mt-1 mb-2 space-y-1">
-                    <SubNavItem label="Rekap Nilai" active={activeView === 'Rekap Nilai'} onClick={() => setActiveView('Rekap Nilai')} darkMode={darkMode} />
+                    {isAdmin && <SubNavItem label="Rekap Nilai" active={activeView === 'Rekap Nilai'} onClick={() => setActiveView('Rekap Nilai')} darkMode={darkMode} />}
                     <SubNavItem label="Rekap Per-Cabang Lomba" active={activeView === 'Rekap Per-Cabang Lomba'} onClick={() => setActiveView('Rekap Per-Cabang Lomba')} darkMode={darkMode} />
-                    <SubNavItem label="Pengumuman" active={activeView === 'Pengumuman'} onClick={() => setActiveView('Pengumuman')} darkMode={darkMode} />
+                    {isAdmin && <SubNavItem label="Pengumuman" active={activeView === 'Pengumuman'} onClick={() => setActiveView('Pengumuman')} darkMode={darkMode} />}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
-            <NavItem icon={Printer} label="Cetak" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+            {isAdmin && <NavItem icon={Printer} label="Cetak" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
             <AnimatePresence>
-              {(activeView === 'Sertifikat') && sidebarOpen && (
+              {(activeView === 'Sertifikat') && sidebarOpen && isAdmin && (
                 <motion.div 
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
