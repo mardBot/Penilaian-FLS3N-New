@@ -49,10 +49,19 @@ import {
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Toaster, toast } from 'sonner';
 import { supabase } from './lib/supabase';
 
 // --- Types ---
 type View = 'Dashboard' | 'Data Peserta' | 'Nomor Tampilan' | 'Penilaian' | 'Rekap Nilai' | 'Rekap Per-Cabang Lomba' | 'Pengumuman' | 'Pengaturan' | 'Daftar Hadir' | 'Sertifikat';
+
+interface Activity {
+  id: string;
+  user_name: string;
+  action: string;
+  type: 'edit' | 'sync' | 'add' | 'delete' | 'system';
+  created_at: string;
+}
 
 interface Peserta {
   id: string;
@@ -154,7 +163,13 @@ const NavItem = ({ icon: Icon, label, active, onClick, darkMode, sidebarOpen = t
       <Icon size={18} />
     </div>
     {sidebarOpen && (
-      <>
+      <motion.div 
+        initial={{ opacity: 0, width: 0 }}
+        animate={{ opacity: 1, width: 'auto' }}
+        exit={{ opacity: 0, width: 0 }}
+        transition={{ duration: 0.2 }}
+        className="flex items-center flex-1 overflow-hidden"
+      >
         <span className={`font-bold text-sm whitespace-nowrap ${active ? 'opacity-100' : 'opacity-90'}`}>{label}</span>
         {active && (
           <motion.div 
@@ -164,7 +179,7 @@ const NavItem = ({ icon: Icon, label, active, onClick, darkMode, sidebarOpen = t
             <div className={`w-1.5 h-1.5 rounded-full ${darkMode ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.6)]' : 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]'}`} />
           </motion.div>
         )}
-      </>
+      </motion.div>
     )}
   </button>
 );
@@ -228,6 +243,7 @@ const DashboardView = ({
   cabangLomba, 
   schoolList,
   settings,
+  activities,
   darkMode,
   onNavigate
 }: { 
@@ -235,12 +251,16 @@ const DashboardView = ({
   cabangLomba: string[], 
   schoolList: string[],
   settings: AppSettings,
+  activities: Activity[],
   darkMode?: boolean,
   onNavigate: (view: View) => void
 }) => {
   const totalPeserta = pesertaList.length;
   const totalCabang = cabangLomba.length;
   const totalSekolah = schoolList.length;
+
+  const uniquePesertaList = getUniqueSchoolParticipants(pesertaList);
+  const totalUniquePeserta = uniquePesertaList.length;
 
   // Data for Category Distribution
   const categoryData = cabangLomba.map(cat => {
@@ -254,12 +274,12 @@ const DashboardView = ({
   }).sort((a, b) => b.peserta - a.peserta);
 
   // Data for Scoring Progress
-  const judgedCount = pesertaList.filter(p => p.scores && p.scores.some(s => s !== '' && s !== 0)).length;
-  const progressPercentage = totalPeserta > 0 ? Math.round((judgedCount / totalPeserta) * 100) : 0;
+  const judgedCount = uniquePesertaList.filter(p => p.scores && p.scores.some(s => s !== '' && s !== 0)).length;
+  const progressPercentage = totalUniquePeserta > 0 ? Math.round((judgedCount / totalUniquePeserta) * 100) : 0;
   
   const pieData = [
     { name: 'Dinilai', value: judgedCount },
-    { name: 'Belum', value: totalPeserta - judgedCount }
+    { name: 'Belum', value: totalUniquePeserta - judgedCount }
   ];
   const PIE_COLORS = ['#0d9488', '#f1f5f9'];
   const CATEGORY_COLORS = [
@@ -272,8 +292,6 @@ const DashboardView = ({
     name: school,
     count: pesertaList.filter(p => p.school === school).length
   })).sort((a, b) => b.count - a.count).slice(0, 5);
-
-  const uniquePesertaList = getUniqueSchoolParticipants(pesertaList);
 
   // Data for Top 6 per Category
   const topRankings = cabangLomba.map(cat => {
@@ -522,24 +540,63 @@ const DashboardView = ({
         <div className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
           <h3 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Aktivitas Terbaru</h3>
           <div className="space-y-6">
-            {[
-              { user: "Admin", action: "Memperbarui nilai Seni Tari", time: "Baru saja", icon: Edit2, color: darkMode ? "text-blue-400 bg-blue-900/20" : "text-blue-500 bg-blue-50" },
-              { user: "Sistem", action: "Sinkronisasi data peserta", time: "10 menit yang lalu", icon: RotateCcw, color: darkMode ? "text-emerald-400 bg-emerald-900/20" : "text-emerald-500 bg-emerald-50" },
-              { user: "Admin", action: "Menambahkan peserta baru", time: "25 menit yang lalu", icon: UserRound, color: darkMode ? "text-amber-400 bg-amber-900/20" : "text-amber-500 bg-amber-50" },
-              { user: "Sistem", action: "Backup data berhasil", time: "1 jam yang lalu", icon: Save, color: darkMode ? "text-rose-400 bg-rose-900/20" : "text-rose-500 bg-rose-50" },
-            ].map((item, i) => (
-              <div key={i} className="flex items-start gap-4">
-                <div className={`p-2 rounded-xl ${item.color}`}>
-                  <item.icon size={16} />
+            {activities.length > 0 ? activities.map((item) => {
+              let icon = Edit2;
+              let color = darkMode ? "text-blue-400 bg-blue-900/20" : "text-blue-500 bg-blue-50";
+              
+              switch (item.type) {
+                case 'sync':
+                  icon = RotateCcw;
+                  color = darkMode ? "text-emerald-400 bg-emerald-900/20" : "text-emerald-500 bg-emerald-50";
+                  break;
+                case 'add':
+                  icon = UserRound;
+                  color = darkMode ? "text-amber-400 bg-amber-900/20" : "text-amber-500 bg-amber-50";
+                  break;
+                case 'delete':
+                  icon = Trash2;
+                  color = darkMode ? "text-rose-400 bg-rose-900/20" : "text-rose-500 bg-rose-50";
+                  break;
+                case 'system':
+                  icon = Save;
+                  color = darkMode ? "text-slate-400 bg-slate-900/20" : "text-slate-500 bg-slate-50";
+                  break;
+              }
+
+              const date = new Date(item.created_at);
+              const now = new Date();
+              const diffMs = now.getTime() - date.getTime();
+              const diffMins = Math.floor(diffMs / 60000);
+              const diffHours = Math.floor(diffMins / 60);
+              const diffDays = Math.floor(diffHours / 24);
+
+              let timeString = "Baru saja";
+              if (diffDays > 0) {
+                timeString = `${diffDays} hari yang lalu`;
+              } else if (diffHours > 0) {
+                timeString = `${diffHours} jam yang lalu`;
+              } else if (diffMins > 0) {
+                timeString = `${diffMins} menit yang lalu`;
+              }
+
+              const IconComponent = icon;
+
+              return (
+                <div key={item.id} className="flex items-start gap-4">
+                  <div className={`p-2 rounded-xl ${color}`}>
+                    <IconComponent size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
+                      <span className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.user_name}</span> {item.action}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">{timeString}</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
-                    <span className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.user}</span> {item.action}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-0.5">{item.time}</p>
-                </div>
-              </div>
-            ))}
+              );
+            }) : (
+              <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Belum ada aktivitas.</p>
+            )}
           </div>
         </div>
       </div>
@@ -866,6 +923,7 @@ const NomorTampilanView = ({
 
   const handleSave = () => {
     onSaveDisplayNumbers(editedNumbers);
+    setEditedNumbers({});
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -950,9 +1008,13 @@ const NomorTampilanView = ({
                 <td className={`px-6 py-4 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{peserta.category}</td>
                 <td className="px-6 py-4">
                   <input 
-                    type="number" 
+                    type="text" 
+                    inputMode="numeric"
                     value={editedNumbers[peserta.id] ?? (peserta.displayNumber || '')}
-                    onChange={(e) => setEditedNumbers({ ...editedNumbers, [peserta.id]: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setEditedNumbers({ ...editedNumbers, [peserta.id]: val });
+                    }}
                     disabled={!isAdmin}
                     placeholder="Input No."
                     className={`w-full px-3 py-1.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold ${
@@ -979,7 +1041,7 @@ const NomorTampilanView = ({
 
 const PenilaianView = ({ 
   pesertaList, 
-  onUpdateScore,
+  onSaveScores,
   categoryFilter,
   onCategoryFilterChange,
   cabangLomba,
@@ -987,7 +1049,7 @@ const PenilaianView = ({
   isAdmin
 }: { 
   pesertaList: Peserta[], 
-  onUpdateScore: (id: string, index: number, value: string) => void,
+  onSaveScores: (editedScores: Record<string, [string|number, string|number, string|number]>) => void,
   categoryFilter: string,
   onCategoryFilterChange: (category: string) => void,
   cabangLomba: string[],
@@ -995,11 +1057,24 @@ const PenilaianView = ({
   isAdmin: boolean
 }) => {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [editedScores, setEditedScores] = useState<Record<string, [string|number, string|number, string|number]>>({});
   const uniquePesertaList = getUniqueSchoolParticipants(pesertaList);
 
   const handleSave = () => {
+    onSaveScores(editedScores);
+    setEditedScores({});
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
+  };
+
+  const handleScoreChange = (id: string, index: number, value: string) => {
+    const val = value.replace(/\D/g, '');
+    setEditedScores(prev => {
+      const currentScores = prev[id] || pesertaList.find(p => p.id === id)?.scores || ['', '', ''];
+      const newScores = [...currentScores] as [string|number, string|number, string|number];
+      newScores[index] = val;
+      return { ...prev, [id]: newScores };
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, rowIndex: number, colIndex: number) => {
@@ -1014,9 +1089,10 @@ const PenilaianView = ({
 
   // Calculate totals and ranks
   const dataWithTotal = uniquePesertaList.map(p => {
-    const s1 = Number(p.scores?.[0]) || 0;
-    const s2 = Number(p.scores?.[1]) || 0;
-    const s3 = Number(p.scores?.[2]) || 0;
+    const currentScores = editedScores[p.id] || p.scores || ['', '', ''];
+    const s1 = Number(currentScores[0]) || 0;
+    const s2 = Number(currentScores[1]) || 0;
+    const s3 = Number(currentScores[2]) || 0;
     return { ...p, total: s1 + s2 + s3 };
   });
 
@@ -1118,9 +1194,10 @@ const PenilaianView = ({
                   <td className="px-4 py-4">
                     <input 
                       id={`score-input-${rowIndex}-0`}
-                      type="number" 
-                      value={peserta.scores?.[0] ?? ''}
-                      onChange={(e) => onUpdateScore(peserta.id, 0, e.target.value)}
+                      type="text" 
+                      inputMode="numeric"
+                      value={editedScores[peserta.id]?.[0] ?? (peserta.scores?.[0] ?? '')}
+                      onChange={(e) => handleScoreChange(peserta.id, 0, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 0)}
                       disabled={!isAdmin}
                       className={`w-full px-2 py-1 border rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
@@ -1131,9 +1208,10 @@ const PenilaianView = ({
                   <td className="px-4 py-4">
                     <input 
                       id={`score-input-${rowIndex}-1`}
-                      type="number" 
-                      value={peserta.scores?.[1] ?? ''}
-                      onChange={(e) => onUpdateScore(peserta.id, 1, e.target.value)}
+                      type="text" 
+                      inputMode="numeric"
+                      value={editedScores[peserta.id]?.[1] ?? (peserta.scores?.[1] ?? '')}
+                      onChange={(e) => handleScoreChange(peserta.id, 1, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 1)}
                       disabled={!isAdmin}
                       className={`w-full px-2 py-1 border rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
@@ -1144,9 +1222,10 @@ const PenilaianView = ({
                   <td className="px-4 py-4">
                     <input 
                       id={`score-input-${rowIndex}-2`}
-                      type="number" 
-                      value={peserta.scores?.[2] ?? ''}
-                      onChange={(e) => onUpdateScore(peserta.id, 2, e.target.value)}
+                      type="text" 
+                      inputMode="numeric"
+                      value={editedScores[peserta.id]?.[2] ?? (peserta.scores?.[2] ?? '')}
+                      onChange={(e) => handleScoreChange(peserta.id, 2, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, rowIndex, 2)}
                       disabled={!isAdmin}
                       className={`w-full px-2 py-1 border rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${
@@ -2317,7 +2396,7 @@ const SertifikatJuaraView = ({ pesertaList, cabangLomba, settings, darkMode }: {
 
   const downloadCSV = () => {
     if (filteredData.length === 0) {
-      alert("Tidak ada data sertifikat untuk diunduh.");
+      toast.error("Tidak ada data sertifikat untuk diunduh.");
       return;
     }
 
@@ -2494,17 +2573,17 @@ const PengaturanView = ({
           
           if (!error) {
             setSchoolList([...schoolList, ...uniqueNewSchools]);
-            alert(`Berhasil mengimpor ${uniqueNewSchools.length} sekolah.`);
+            toast.success(`Berhasil mengimpor ${uniqueNewSchools.length} sekolah.`);
           } else {
             console.error("Supabase error:", error);
-            alert(`Gagal mengimpor sekolah ke database: ${error.message}`);
+            toast.error(`Gagal mengimpor sekolah ke database: ${error.message}`);
           }
         } else {
-          alert('Tidak ada data sekolah baru untuk diimpor (mungkin sudah ada atau file kosong).');
+          toast.info('Tidak ada data sekolah baru untuk diimpor (mungkin sudah ada atau file kosong).');
         }
       } catch (err) {
         console.error("Parsing error:", err);
-        alert('Gagal membaca file CSV/Excel.');
+        toast.error('Gagal membaca file CSV/Excel.');
       }
     };
     reader.readAsBinaryString(file);
@@ -2539,17 +2618,17 @@ const PengaturanView = ({
           
           if (!error) {
             setCabangLomba([...cabangLomba, ...uniqueNewCategories]);
-            alert(`Berhasil mengimpor ${uniqueNewCategories.length} cabang lomba.`);
+            toast.success(`Berhasil mengimpor ${uniqueNewCategories.length} cabang lomba.`);
           } else {
             console.error("Supabase error:", error);
-            alert(`Gagal mengimpor cabang lomba ke database: ${error.message}`);
+            toast.error(`Gagal mengimpor cabang lomba ke database: ${error.message}`);
           }
         } else {
-          alert('Tidak ada data cabang lomba baru untuk diimpor (mungkin sudah ada atau file kosong).');
+          toast.info('Tidak ada data cabang lomba baru untuk diimpor (mungkin sudah ada atau file kosong).');
         }
       } catch (err) {
         console.error("Parsing error:", err);
-        alert('Gagal membaca file CSV/Excel.');
+        toast.error('Gagal membaca file CSV/Excel.');
       }
     };
     reader.readAsBinaryString(file);
@@ -2558,12 +2637,12 @@ const PengaturanView = ({
 
   const handleAddSchool = async () => {
     if (!newSchool.trim()) {
-      alert('Nama sekolah tidak boleh kosong.');
+      toast.error('Nama sekolah tidak boleh kosong.');
       return;
     }
     const schoolName = newSchool.trim();
     if (schoolList.includes(schoolName)) {
-      alert('Sekolah tersebut sudah ada di daftar.');
+      toast.error('Sekolah tersebut sudah ada di daftar.');
       return;
     }
     
@@ -2576,7 +2655,9 @@ const PengaturanView = ({
       console.error("Error adding school:", error);
       setSchoolList(schoolList);
       setNewSchool(schoolName);
-      alert('Gagal menambah sekolah: ' + error.message);
+      toast.error('Gagal menambah sekolah: ' + error.message);
+    } else {
+      toast.success('Berhasil menambah sekolah.');
     }
   };
 
@@ -2596,7 +2677,9 @@ const PengaturanView = ({
         console.error("Error updating school:", error);
         setSchoolList(schoolList);
         setEditingSchool({ index: editingSchool.index, value: newName });
-        alert('Gagal mengupdate sekolah: ' + error.message);
+        toast.error('Gagal mengupdate sekolah: ' + error.message);
+      } else {
+        toast.success('Berhasil mengupdate sekolah.');
       }
     }
   };
@@ -2608,18 +2691,20 @@ const PengaturanView = ({
     if (error) {
       console.error("Error removing school:", error);
       setSchoolList(schoolList);
-      alert('Gagal menghapus sekolah: ' + error.message);
+      toast.error('Gagal menghapus sekolah: ' + error.message);
+    } else {
+      toast.success('Berhasil menghapus sekolah.');
     }
   };
 
   const handleAddCabang = async () => {
     if (!newCabang.trim()) {
-      alert('Nama cabang lomba tidak boleh kosong.');
+      toast.error('Nama cabang lomba tidak boleh kosong.');
       return;
     }
     const cabangName = newCabang.trim();
     if (cabangLomba.includes(cabangName)) {
-      alert('Cabang lomba tersebut sudah ada di daftar.');
+      toast.error('Cabang lomba tersebut sudah ada di daftar.');
       return;
     }
     
@@ -2632,7 +2717,9 @@ const PengaturanView = ({
       console.error("Error adding category:", error);
       setCabangLomba(cabangLomba);
       setNewCabang(cabangName);
-      alert('Gagal menambah cabang lomba: ' + error.message);
+      toast.error('Gagal menambah cabang lomba: ' + error.message);
+    } else {
+      toast.success('Berhasil menambah cabang lomba.');
     }
   };
 
@@ -2652,7 +2739,9 @@ const PengaturanView = ({
         console.error("Error updating category:", error);
         setCabangLomba(cabangLomba);
         setEditingCabang({ index: editingCabang.index, value: newName });
-        alert('Gagal mengupdate cabang lomba: ' + error.message);
+        toast.error('Gagal mengupdate cabang lomba: ' + error.message);
+      } else {
+        toast.success('Berhasil mengupdate cabang lomba.');
       }
     }
   };
@@ -2664,7 +2753,9 @@ const PengaturanView = ({
     if (error) {
       console.error("Error removing category:", error);
       setCabangLomba(cabangLomba);
-      alert('Gagal menghapus cabang lomba: ' + error.message);
+      toast.error('Gagal menghapus cabang lomba: ' + error.message);
+    } else {
+      toast.success('Berhasil menghapus cabang lomba.');
     }
   };
 
@@ -3157,7 +3248,7 @@ export default function App() {
     const savedView = localStorage.getItem('activeView');
     return (savedView as View) || 'Dashboard';
   });
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPeserta, setEditingPeserta] = useState<Peserta | null>(null);
@@ -3178,12 +3269,13 @@ export default function App() {
   
   useEffect(() => {
     localStorage.setItem('isAdmin', String(isAdmin));
-    if (!isAdmin && activeView !== 'Dashboard' && activeView !== 'Rekap Per-Cabang Lomba') {
+    if (!isAdmin && activeView !== 'Dashboard') {
       setActiveView('Dashboard');
     }
   }, [isAdmin, activeView]);
   
   const [schoolList, setSchoolList] = useState<string[]>([...SCHOOL_LIST]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [cabangLomba, setCabangLomba] = useState<string[]>([...CABANG_LOMBA]);
   const [settings, setSettings] = useState<AppSettings>({
     judgeName: "",
@@ -3249,6 +3341,12 @@ export default function App() {
           if (!categoriesError) {
             await supabase.from('master_categories').insert(CABANG_LOMBA.map(name => ({ name })));
           }
+        }
+
+        // Fetch Activities
+        const { data: activitiesData } = await supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(10);
+        if (activitiesData) {
+          setActivities(activitiesData as Activity[]);
         }
 
         // Fetch Peserta
@@ -3351,13 +3449,35 @@ export default function App() {
       })
       .subscribe();
 
+    const activitiesSubscription = supabase
+      .channel('activities-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, () => {
+        supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(10).then(({ data }) => {
+          if (data) setActivities(data as Activity[]);
+        });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(pesertaSubscription);
       supabase.removeChannel(settingsSubscription);
       supabase.removeChannel(schoolsSubscription);
       supabase.removeChannel(categoriesSubscription);
+      supabase.removeChannel(activitiesSubscription);
     };
   }, []);
+
+  const logActivity = async (action: string, type: 'edit' | 'sync' | 'add' | 'delete' | 'system') => {
+    const newActivity = {
+      user_name: isAdmin ? 'Admin' : 'Sistem',
+      action,
+      type
+    };
+    const { error } = await supabase.from('activities').insert([newActivity]);
+    if (error) {
+      console.error("Error logging activity:", error);
+    }
+  };
 
   const handleAddPeserta = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3378,7 +3498,10 @@ export default function App() {
       if (error) {
         console.error("Error updating peserta:", error);
         setPesertaList(pesertaList.map(p => p.id === editingPeserta.id ? editingPeserta : p));
-        alert('Gagal menyimpan perubahan peserta: ' + error.message);
+        toast.error('Gagal menyimpan perubahan peserta: ' + error.message);
+      } else {
+        logActivity(`Memperbarui data peserta: ${formData.name}`, 'edit');
+        toast.success('Berhasil memperbarui data peserta.');
       }
     } else {
       const { error } = await supabase
@@ -3393,8 +3516,10 @@ export default function App() {
 
       if (error) {
         console.error("Error adding peserta:", error);
-        alert('Gagal menambah peserta baru: ' + error.message);
+        toast.error('Gagal menambah peserta baru: ' + error.message);
       } else {
+        logActivity(`Menambahkan peserta baru: ${formData.name}`, 'add');
+        toast.success('Berhasil menambahkan peserta baru.');
         const { data: pesertaData } = await supabase.from('peserta').select('*');
         if (pesertaData) {
           setPesertaList(pesertaData.map(p => ({
@@ -3426,7 +3551,10 @@ export default function App() {
         if (deletedPeserta) {
           setPesertaList([...pesertaList, deletedPeserta]);
         }
-        alert('Gagal menghapus peserta: ' + error.message);
+        toast.error('Gagal menghapus peserta: ' + error.message);
+      } else {
+        logActivity(`Menghapus peserta: ${deletedPeserta?.name}`, 'delete');
+        toast.success('Berhasil menghapus peserta.');
       }
       setDeletingId(null);
     }
@@ -3470,25 +3598,53 @@ export default function App() {
       const { error } = await supabase.from('peserta').update({ display_number: update.display_number }).eq('id', update.id);
       if (error) {
         console.error("Error updating display number:", error);
+        toast.error('Gagal menyimpan nomor tampilan untuk salah satu peserta.');
       }
     }
+    logActivity(`Memperbarui nomor tampilan untuk ${updates.length} peserta`, 'edit');
+    toast.success('Berhasil menyimpan nomor tampilan.');
   };
 
-  const handleUpdateScore = async (id: string, index: number, value: string) => {
-    const p = pesertaList.find(pes => pes.id === id);
-    if (!p) return;
+  const handleSaveScores = async (editedScores: Record<string, [string|number, string|number, string|number]>) => {
+    if (Object.keys(editedScores).length === 0) return;
 
-    const newScores = [...(p.scores || ['', '', ''])] as [number | string, number | string, number | string];
-    newScores[index] = value;
+    const updates: { id: string, scores: [string|number, string|number, string|number] }[] = [];
+    const updatedPesertaList = [...pesertaList];
 
-    setPesertaList(pesertaList.map(pes => pes.id === id ? { ...pes, scores: newScores } : pes));
+    for (const [id, scores] of Object.entries(editedScores)) {
+      const p = pesertaList.find(pes => pes.id === id);
+      if (!p) continue;
 
-    const { error } = await supabase.from('peserta').update({ scores: newScores }).eq('id', id);
-    if (error) {
-      console.error("Error updating score:", error);
-      setPesertaList(pesertaList.map(pes => pes.id === id ? { ...pes, scores: p.scores } : pes));
-      alert('Gagal menyimpan nilai: ' + error.message);
+      if (p.category === 'Pantomim' || p.category === 'Seni Tari') {
+        const matchingPeserta = pesertaList.filter(pes => pes.school === p.school && pes.category === p.category);
+        for (const match of matchingPeserta) {
+          updates.push({ id: match.id, scores });
+          const index = updatedPesertaList.findIndex(pes => pes.id === match.id);
+          if (index !== -1) {
+            updatedPesertaList[index] = { ...updatedPesertaList[index], scores };
+          }
+        }
+      } else {
+        updates.push({ id: p.id, scores });
+        const index = updatedPesertaList.findIndex(pes => pes.id === p.id);
+        if (index !== -1) {
+          updatedPesertaList[index] = { ...updatedPesertaList[index], scores };
+        }
+      }
     }
+
+    setPesertaList(updatedPesertaList);
+
+    // Update Supabase
+    for (const update of updates) {
+      const { error } = await supabase.from('peserta').update({ scores: update.scores }).eq('id', update.id);
+      if (error) {
+        console.error("Error updating score:", error);
+        toast.error('Gagal menyimpan nilai untuk salah satu peserta.');
+      }
+    }
+    logActivity(`Memperbarui nilai untuk ${updates.length} peserta`, 'edit');
+    toast.success('Berhasil menyimpan nilai.');
   };
 
   const handleSaveSettings = async () => {
@@ -3517,7 +3673,10 @@ export default function App() {
       console.error("Error saving settings:", error);
       setSettings(oldSettings);
       setShowSaveSuccess(false);
-      alert('Gagal menyimpan pengaturan: ' + error.message);
+      toast.error('Gagal menyimpan pengaturan: ' + error.message);
+    } else {
+      logActivity(`Memperbarui pengaturan aplikasi`, 'edit');
+      toast.success('Berhasil menyimpan pengaturan.');
     }
   };
 
@@ -3589,7 +3748,7 @@ export default function App() {
 
         if (error) {
           console.error("Error importing peserta:", error);
-          alert('Gagal mengimpor data ke database: ' + error.message);
+          toast.error('Gagal mengimpor data ke database: ' + error.message);
         } else if (insertedData) {
           const newPesertaList = insertedData.map(p => ({
             id: p.id,
@@ -3607,10 +3766,11 @@ export default function App() {
             const uniqueNew = newPesertaList.filter(p => !existingIds.has(p.id));
             return [...prev, ...uniqueNew];
           });
-          alert(`Berhasil mengimpor ${importedPeserta.length} peserta.`);
+          logActivity(`Mengimpor ${importedPeserta.length} data peserta`, 'sync');
+          toast.success(`Berhasil mengimpor ${importedPeserta.length} peserta.`);
         }
       } else {
-        alert('Tidak ada data valid yang ditemukan. Pastikan header kolom sesuai (Nama Peserta, Nama Sekolah, Tempat Tgl Lahir, Cabang Lomba).');
+        toast.error('Tidak ada data valid yang ditemukan. Pastikan header kolom sesuai (Nama Peserta, Nama Sekolah, Tempat Tgl Lahir, Cabang Lomba).');
       }
     };
     reader.readAsBinaryString(file);
@@ -3648,6 +3808,7 @@ export default function App() {
           cabangLomba={cabangLomba} 
           schoolList={schoolList} 
           settings={settings} 
+          activities={activities}
           darkMode={darkMode}
           onNavigate={setActiveView}
         />
@@ -3688,7 +3849,7 @@ export default function App() {
       case 'Penilaian': return (
         <PenilaianView 
           pesertaList={filteredPeserta}
-          onUpdateScore={handleUpdateScore}
+          onSaveScores={handleSaveScores}
           categoryFilter={categoryFilter}
           onCategoryFilterChange={setCategoryFilter}
           cabangLomba={cabangLomba}
@@ -3729,6 +3890,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen font-sans flex transition-colors duration-300 ${darkMode ? 'bg-[#0f1117] text-slate-100 dark' : 'bg-slate-50 text-slate-900'}`}>
+      <Toaster position="top-right" richColors theme={darkMode ? 'dark' : 'light'} />
       {/* Login Modal */}
       <AnimatePresence>
         {showLoginModal && (
@@ -3767,8 +3929,9 @@ export default function App() {
                           setIsAdmin(true);
                           setShowLoginModal(false);
                           setPasswordInput('');
+                          toast.success('Berhasil login sebagai Admin');
                         } else {
-                          alert('Password salah!');
+                          toast.error('Password salah!');
                         }
                       }
                     }}
@@ -3784,8 +3947,9 @@ export default function App() {
                       setIsAdmin(true);
                       setShowLoginModal(false);
                       setPasswordInput('');
+                      toast.success('Berhasil login sebagai Admin');
                     } else {
-                      alert('Password salah!');
+                      toast.error('Password salah!');
                     }
                   }}
                   className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
@@ -3930,109 +4094,90 @@ export default function App() {
 
       {/* Mobile Sidebar Overlay (Removed since sidebar is always visible) */}
 
-      {/* Sidebar */}
-      <aside 
-        className={`fixed inset-y-0 left-0 z-50 transition-all duration-500 ease-in-out border-r ${
-          darkMode 
-            ? 'bg-slate-900 border-slate-800' 
-            : 'bg-white border-slate-100 shadow-xl'
-        } ${
-          sidebarOpen ? 'translate-x-0 w-72' : 'translate-x-0 w-20'
-        }`}
-      >
-        <div className="h-full flex flex-col">
-          {/* Logo Section with distinct background */}
-          <div className={`p-6 ${!sidebarOpen ? 'px-4' : ''}`}>
-            <div className={`flex items-center gap-4 p-4 rounded-3xl border relative ${
-              !sidebarOpen ? 'p-2 justify-center flex-col gap-2' : ''
-            } ${
-              darkMode 
-                ? 'bg-slate-800/50 border-slate-700 shadow-lg' 
-                : 'bg-indigo-50 border-indigo-100 shadow-sm'
-            }`}>
-              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-2xl shadow-indigo-500/20 shrink-0 overflow-hidden border border-white/20">
-                <img src="https://pusatprestasinasional.kemendikdasmen.go.id/uploads/event/cOKxdgS0KQhv9FlzGXeJin7A4hX8T6JaIwK3Evy1.png" alt="Logo Aplikasi" className="w-full h-full object-contain p-1.5" />
-              </div>
-              {sidebarOpen ? (
-                <>
+      {/* Sidebar - Only show if admin */}
+      {isAdmin && (
+        <aside 
+          className={`fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-in-out border-r ${
+            darkMode 
+              ? 'bg-slate-900 border-slate-800' 
+              : 'bg-white border-slate-100 shadow-xl'
+          } ${
+            sidebarOpen ? 'translate-x-0 w-72' : 'translate-x-0 w-20'
+          }`}
+        >
+          <div className="h-full flex flex-col">
+            {/* Logo Section */}
+            <div className={`p-6 ${!sidebarOpen ? 'px-4' : ''}`}>
+              <div className={`flex items-center gap-4 relative ${
+                !sidebarOpen ? 'justify-center flex-col gap-2' : ''
+              }`}>
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-2xl shadow-indigo-500/20 shrink-0 overflow-hidden border border-white/20">
+                  <img src="https://pusatprestasinasional.kemendikdasmen.go.id/uploads/event/cOKxdgS0KQhv9FlzGXeJin7A4hX8T6JaIwK3Evy1.png" alt="Logo Aplikasi" className="w-full h-full object-contain p-1.5" />
+                </div>
+                {sidebarOpen && (
                   <div className="overflow-hidden whitespace-nowrap flex-1">
                     <h1 className={`font-black text-xl tracking-tighter ${darkMode ? 'text-white' : 'text-slate-900'}`}>FLS3N-SD</h1>
                     <p className={`text-[10px] font-bold uppercase tracking-[0.2em] mt-0.5 ${darkMode ? 'text-indigo-300' : 'text-indigo-600'}`}>Kecamatan Beji</p>
                   </div>
-                  <button 
-                    onClick={() => setSidebarOpen(false)}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-indigo-100 hover:text-indigo-600'
-                    }`}
-                  >
-                    <X size={20} />
-                  </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => setSidebarOpen(true)}
-                  className={`p-1.5 rounded-lg transition-colors mt-2 ${
-                    darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-indigo-100 hover:text-indigo-600'
-                  }`}
-                >
-                  <Menu size={20} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar">
-            <NavItem icon={LayoutDashboard} label="Dashboard" active={activeView === 'Dashboard'} onClick={() => setActiveView('Dashboard')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            {isAdmin && <NavItem icon={UserRound} label="Data Peserta" active={activeView === 'Data Peserta'} onClick={() => setActiveView('Data Peserta')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
-            {isAdmin && <NavItem icon={FileText} label="Daftar Hadir" active={activeView === 'Daftar Hadir'} onClick={() => setActiveView('Daftar Hadir')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
-            {isAdmin && <NavItem icon={Binary} label="Nomor Tampilan" active={activeView === 'Nomor Tampilan'} onClick={() => setActiveView('Nomor Tampilan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
-            {isAdmin && <NavItem icon={Award} label="Penilaian" active={activeView === 'Penilaian'} onClick={() => setActiveView('Penilaian')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
-            <NavItem icon={BarChart3} label="Laporan" active={activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman'} onClick={() => setActiveView(isAdmin ? 'Rekap Nilai' : 'Rekap Per-Cabang Lomba')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
-            <AnimatePresence>
-              {(activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman') && sidebarOpen && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-1 mb-2 space-y-1">
-                    {isAdmin && <SubNavItem label="Rekap Nilai" active={activeView === 'Rekap Nilai'} onClick={() => setActiveView('Rekap Nilai')} darkMode={darkMode} />}
-                    <SubNavItem label="Rekap Per-Cabang Lomba" active={activeView === 'Rekap Per-Cabang Lomba'} onClick={() => setActiveView('Rekap Per-Cabang Lomba')} darkMode={darkMode} />
-                    {isAdmin && <SubNavItem label="Pengumuman" active={activeView === 'Pengumuman'} onClick={() => setActiveView('Pengumuman')} darkMode={darkMode} />}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {isAdmin && <NavItem icon={Printer} label="Cetak" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
-            <AnimatePresence>
-              {(activeView === 'Sertifikat') && sidebarOpen && isAdmin && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-1 mb-2 space-y-1">
-                    <SubNavItem label="Sertifikat" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {isAdmin && (
-              <div className="pt-6 mt-6 border-t border-white/10">
-                <NavItem icon={Settings2} label="Pengaturan" active={activeView === 'Pengaturan'} onClick={() => setActiveView('Pengaturan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+                )}
               </div>
-            )}
-          </nav>
-        </div>
-      </aside>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar">
+              <NavItem icon={LayoutDashboard} label="Dashboard" active={activeView === 'Dashboard'} onClick={() => setActiveView('Dashboard')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+              {isAdmin && <NavItem icon={UserRound} label="Data Peserta" active={activeView === 'Data Peserta'} onClick={() => setActiveView('Data Peserta')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+              {isAdmin && <NavItem icon={FileText} label="Daftar Hadir" active={activeView === 'Daftar Hadir'} onClick={() => setActiveView('Daftar Hadir')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+              {isAdmin && <NavItem icon={Binary} label="Nomor Tampilan" active={activeView === 'Nomor Tampilan'} onClick={() => setActiveView('Nomor Tampilan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+              {isAdmin && <NavItem icon={Award} label="Penilaian" active={activeView === 'Penilaian'} onClick={() => setActiveView('Penilaian')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+              <NavItem icon={BarChart3} label="Laporan" active={activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman'} onClick={() => setActiveView(isAdmin ? 'Rekap Nilai' : 'Rekap Per-Cabang Lomba')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+              <AnimatePresence>
+                {(activeView === 'Rekap Nilai' || activeView === 'Rekap Per-Cabang Lomba' || activeView === 'Pengumuman') && sidebarOpen && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-1 mb-2 space-y-1">
+                      {isAdmin && <SubNavItem label="Rekap Nilai" active={activeView === 'Rekap Nilai'} onClick={() => setActiveView('Rekap Nilai')} darkMode={darkMode} />}
+                      <SubNavItem label="Rekap Per-Cabang Lomba" active={activeView === 'Rekap Per-Cabang Lomba'} onClick={() => setActiveView('Rekap Per-Cabang Lomba')} darkMode={darkMode} />
+                      {isAdmin && <SubNavItem label="Pengumuman" active={activeView === 'Pengumuman'} onClick={() => setActiveView('Pengumuman')} darkMode={darkMode} />}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {isAdmin && <NavItem icon={Printer} label="Cetak" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} sidebarOpen={sidebarOpen} />}
+              <AnimatePresence>
+                {(activeView === 'Sertifikat') && sidebarOpen && isAdmin && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-1 mb-2 space-y-1">
+                      <SubNavItem label="Sertifikat" active={activeView === 'Sertifikat'} onClick={() => setActiveView('Sertifikat')} darkMode={darkMode} />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {isAdmin && (
+                <div className="pt-6 mt-6 border-t border-white/10">
+                  <NavItem icon={Settings2} label="Pengaturan" active={activeView === 'Pengaturan'} onClick={() => setActiveView('Pengaturan')} darkMode={darkMode} sidebarOpen={sidebarOpen} />
+                </div>
+              )}
+            </nav>
+          </div>
+        </aside>
+      )}
 
       {/* Main Content */}
       <main 
         className={`flex-1 transition-all duration-300 ${
-          sidebarOpen ? 'ml-72' : 'ml-20'
+          isAdmin ? (sidebarOpen ? 'ml-72' : 'ml-20') : 'ml-0'
         }`}
       >
         {/* Header */}
@@ -4040,7 +4185,25 @@ export default function App() {
           darkMode ? 'bg-[#1e222d]/80' : 'bg-white/80 shadow-sm'
         }`}>
           <div className="flex items-center gap-4">
-            <h2 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{activeView}</h2>
+            {isAdmin && (
+              <button 
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-indigo-600'
+                }`}
+              >
+                <Menu size={20} />
+              </button>
+            )}
+            {!isAdmin && (
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0 overflow-hidden">
+                  <img src="https://pusatprestasinasional.kemendikdasmen.go.id/uploads/event/cOKxdgS0KQhv9FlzGXeJin7A4hX8T6JaIwK3Evy1.png" alt="Logo" className="w-full h-full object-contain p-1" />
+                </div>
+                <h1 className={`font-black text-lg tracking-tight hidden sm:block ${darkMode ? 'text-white' : 'text-slate-900'}`}>FLS3N-SD Beji</h1>
+              </div>
+            )}
+            <h2 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-slate-800'} ${!isAdmin ? 'hidden sm:block ml-4 border-l pl-4 ' + (darkMode ? 'border-slate-700' : 'border-slate-200') : ''}`}>{activeView}</h2>
           </div>
 
           <div className="flex items-center gap-4">
